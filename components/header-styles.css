@@ -1,0 +1,62 @@
+.jackpot-logo-arch {
+  display: flex;
+  position: relative;
+  height: 8rem;
+  width: 30rem;
+  max-width: 100%;
+}
+
+.jackpot-letter {
+  font-family: "Impact", "Arial Black", sans-serif;
+  font-size: 4.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #FFD700;
+  position: absolute;
+  transform-origin: bottom center;
+  -webkit-text-stroke: 2px #D50000;
+  text-shadow: 
+    0 1px 0 #D50000,
+    0 2px 0 #D50000,
+    0 3px 0 #D50000,
+    0 4px 0 #D50000,
+    0 6px 6px rgba(0, 0, 0, 0.6);
+}
+
+.logo-container {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  position: relative;
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  overflow:  visible;
+}
+
+/* Scratch-off ticket texture */
+.jackpot-logo-arch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(255,255,255,0.05) 1px, transparent 1px),
+    radial-gradient(circle at 30% 60%, rgba(255,255,255,0.05) 1px, transparent 1px),
+    radial-gradient(circle at 55% 35%, rgba(255,255,255,0.05) 1px, transparent 1px),
+    radial-gradient(circle at 70% 80%, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 10px 10px;
+  z-index: -1;
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+  .jackpot-letter {
+    font-size: 2.5rem;
+  }
+  
+  .jackpot-logo-arch {
+    height: 5rem;
+    width: 16rem;
+  }
+}
