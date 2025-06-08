@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ChatMessage } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { userGifs } from "@/lib/mock-data";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import { parseMessageWithEmojis, getEmojiCodeByUrl } from "@/lib/emoji-map";
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, Star } from "lucide-react";
 import { usePrivy } from '@privy-io/react-auth';
 import { WalletConnect } from './WalletConnect';
 
@@ -70,7 +70,6 @@ export function ChatSection({ messages: initialMessages }: ChatSectionProps) {
   }, []);
 
   useEffect(() => {
-    // Initial scroll to bottom when component loads
     scrollToBottom();
   }, []);
 
@@ -78,21 +77,18 @@ export function ChatSection({ messages: initialMessages }: ChatSectionProps) {
     e.preventDefault();
     if (!newMessage.trim()) return;
     
-    // Parse message into segments for inline emoji display
     const messageSegments = parseMessageWithEmojis(newMessage);
     
-    // Create a new message with segments
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       user: "You",
-      message: newMessage, // Store original message for reference
-      messageSegments, // Store the parsed segments for rendering
+      message: newMessage,
+      messageSegments,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     
     setMessages(prev => [...prev.slice(-19), userMessage]);
     setNewMessage("");
-    // Ensure emoji picker is closed after sending
     setIsEmojiPickerOpen(false);
     setTimeout(scrollToBottom, 100);
   };
@@ -102,117 +98,108 @@ export function ChatSection({ messages: initialMessages }: ChatSectionProps) {
   };
 
   return (
-    <div className="h-full">
-      <Card className="ticket-box overflow-hidden p-0 border-4 border-[#FFD700] bg-[#D50000] h-full flex flex-col">
-        <div className="p-2 bg-[#D50000] flex justify-center shrink-0">
-          <CardTitle 
-            className="text-3xl font-bold uppercase text-center tracking-wider text-[#FFD700]" 
-            style={{ 
-              fontFamily: "Impact, Arial Black, sans-serif",
-              fontWeight: 900,
-              position: "relative",
-              zIndex: 3,
-              WebkitTextStroke: "0px var(--ticket-red)",
-              textShadow: `
-                0 1px 0 #FFE866,
-                0 2px 0 #FFE866,
-                0 3px 0 #B39700,
-                0 4px 0 #B39700,
-                0 5px 0 #B39700,
-                0 6px 8px rgba(0, 0, 0, 0.9)
-              `
-            }}
-          >
-            Chat
-          </CardTitle>
+    <div className="h-full w-full">
+      <Card className="casino-box casino-box-gold overflow-hidden p-0 h-full flex flex-col relative">
+        {/* Corner stars */}
+        <div className="absolute top-2 left-2 z-10">
+          <Star className="h-4 w-4 casino-star" fill="currentColor" />
         </div>
-  
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea 
-            className="h-[370px] bg-[#F5E9C9]" 
-            ref={scrollAreaRef}
-          >
-            <div className="p-3 space-y-2">
-              {messages.map((message, index) => (
-                <motion.div 
-                  key={message.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="relative text-black pr-14"
-                >
-                  <div className="text-black">
-                    <span className="font-bold text-[#8A2BE2]">{message.user}: </span>
-                    {/* Handle messages with inline emoji segments */}
-                    {message.messageSegments ? (
-                      message.messageSegments.map((segment, i) => (
-                        segment.type === 'text' ? (
-                          <span key={i}>{segment.content}</span>
-                        ) : (
-                          <img 
-                            key={i}
-                            src={segment.content} 
-                            alt="emoji" 
-                            className="inline-block mx-1"
-                            style={{ height: "1.2em", verticalAlign: "middle" }}
-                            title={getEmojiCodeByUrl(segment.content) || "emoji"}
-                          />
-                        )
-                      ))
-                    ) : (
-                      // Legacy message display for messages without segments
-                      <>
-                        <span>{message.message}</span>
-                        {message.gif && (
-                          <img 
-                            src={message.gif} 
-                            alt="emoji" 
-                            className="inline-block mx-1"
-                            style={{ height: "1.2em", verticalAlign: "middle" }}
-                            title={getEmojiCodeByUrl(message.gif) || "emoji"}
-                          />
-                        )}
-                      </>
-                    )}
-                    <span className="text-gray-600 text-xs absolute right-0 top-0">{message.timestamp}</span>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </ScrollArea>
+        <div className="absolute top-2 right-2 z-10">
+          <Star className="h-4 w-4 casino-star" fill="currentColor" />
         </div>
         
-        <CardFooter className="bg-[#F5E9C9] shrink-0 p-0">
+        <CardContent className="p-4 h-full flex flex-col min-w-0">
+          {/* Title integrated into content */}
+          <h2 className="text-xl font-black uppercase text-center tracking-wide mb-4 casino-text-gold truncate" 
+              style={{ fontFamily: "Visby Round CF, SF Pro Display, sans-serif" }}>
+            Chat
+          </h2>
+          
+          <div className="flex-1 overflow-hidden min-w-0">
+            <ScrollArea 
+              className="h-[370px] rounded-lg p-3 min-w-0" 
+              ref={scrollAreaRef}
+            >
+              <div className="space-y-2 min-w-0">
+                {messages.map((message, index) => (
+                  <motion.div 
+                    key={message.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="relative min-w-0"
+                  >
+                    <div className="text-white min-w-0 overflow-hidden">
+                      <span className="font-black casino-text-yellow text-sm" style={{ fontFamily: "Visby Round CF, SF Pro Display, sans-serif" }}>{message.user}: </span>
+                      {message.messageSegments ? (
+                        message.messageSegments.map((segment, i) => (
+                          segment.type === 'text' ? (
+                            <span key={i} className="casino-text-gold break-words text-sm">{segment.content}</span>
+                          ) : (
+                            <img 
+                              key={i}
+                              src={segment.content} 
+                              alt="emoji" 
+                              className="inline-block mx-1"
+                              style={{ height: "1.2em", verticalAlign: "middle" }}
+                              title={getEmojiCodeByUrl(segment.content) || "emoji"}
+                            />
+                          )
+                        ))
+                      ) : (
+                        <>
+                          <span className="casino-text-gold break-words text-sm">{message.message}</span>
+                          {message.gif && (
+                            <img 
+                              src={message.gif} 
+                              alt="emoji" 
+                              className="inline-block mx-1"
+                              style={{ height: "1.2em", verticalAlign: "middle" }}
+                              title={getEmojiCodeByUrl(message.gif) || "emoji"}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </CardContent>
+        
+        <CardFooter className="shrink-0 p-2 min-w-0">
           {authenticated ? (
-            <form onSubmit={handleSend} className="w-full flex items-center">
-              <EmojiPicker 
-                onEmojiSelect={handleEmojiSelect} 
-                isOpen={isEmojiPickerOpen}
-                setIsOpen={setIsEmojiPickerOpen}
-              />
-              <div className="flex-1">
-                <div className="relative w-full">
+            <form onSubmit={handleSend} className="w-full flex items-center gap-2 min-w-0">
+              <div className="flex-shrink-0">
+                <EmojiPicker 
+                  onEmojiSelect={handleEmojiSelect} 
+                  isOpen={isEmojiPickerOpen}
+                  setIsOpen={setIsEmojiPickerOpen}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="relative">
                   <Input
                     placeholder="Type a message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    className="w-full bg-[##f9f2df] border-0 text-black rounded-md pr-[40px]"
+                    className="casino-input pr-10 text-sm min-w-0"
                   />
                   <Button 
                     type="submit" 
-                    className="absolute right-0 top-0 bottom-0 bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-bold rounded-r-md border-l-2 border-[#D50000] flex items-center justify-center"
-                    style={{ width: "40px" }}
+                    className="absolute right-0 top-0 bottom-0 casino-button font-black rounded-r-md border-l-2 border-[#2D0A30] flex items-center justify-center px-2"
+                    style={{ borderRadius: "0 6px 6px 0" }}
                   >
-                    <ArrowRightIcon className="h-5 w-5" style={{ 
-                      filter: "drop-shadow(1px 1px 0 #000)",
-                      transition: "transform 0.2s ease",
-                    }} />
+                    <ArrowRightIcon className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             </form>
           ) : (
-            <WalletConnect />
+            <div className="w-full min-w-0">
+              <WalletConnect />
+            </div>
           )}
         </CardFooter>
       </Card>

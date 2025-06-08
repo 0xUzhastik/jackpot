@@ -10,24 +10,28 @@ interface Token {
   size: number;
   speed: number;
   symbol: string;
+  rotation: number;
+  glow: string;
 }
 
 export function FloatingTokens() {
   const [tokens, setTokens] = useState<Token[]>([]);
   
   useEffect(() => {
-    // Generate random tokens
     const tokensArray: Token[] = [];
-    const symbols = ["SOL", "BONK", "JUP", "RAY", "USDC", "WIF", "SWIF"];
+    const symbols = ["$", "★", "♦", "♠", "♥", "♣", "777"];
+    const glowColors = ["#FFD700", "#FF8C00", "#FF1493", "#FFFF00"];
     
     for (let i = 0; i < 12; i++) {
       tokensArray.push({
         id: i,
         x: Math.random() * 100,
         y: -20 - Math.random() * 100,
-        size: 20 + Math.random() * 30,
-        speed: 20 + Math.random() * 60,
-        symbol: symbols[Math.floor(Math.random() * symbols.length)]
+        size: 20 + Math.random() * 25,
+        speed: 25 + Math.random() * 50,
+        symbol: symbols[Math.floor(Math.random() * symbols.length)],
+        rotation: Math.floor(Math.random() * 360),
+        glow: glowColors[Math.floor(Math.random() * glowColors.length)]
       });
     }
     
@@ -39,16 +43,30 @@ export function FloatingTokens() {
       {tokens.map((token) => (
         <motion.div
           key={token.id}
-          className="absolute font-bold font-mono text-[#FFD700]"
+          className="absolute font-bold"
           style={{
             fontSize: token.size,
             left: `${token.x}%`,
-            textShadow: "2px 2px 0 #000"
+            color: token.glow,
+            fontFamily: "Visby Round CF, SF Pro Display, sans-serif",
+            fontWeight: 700,
+            textShadow: `
+              2px 2px 0 #000000,
+              -1px -1px 0 #000000,
+              1px -1px 0 #000000,
+              -1px 1px 0 #000000,
+              0 0 10px ${token.glow},
+              0 0 20px ${token.glow}
+            `,
+            filter: `drop-shadow(0 0 5px ${token.glow})`,
           }}
-          initial={{ y: token.y + "vh" }}
+          initial={{ 
+            y: token.y + "vh",
+            rotate: token.rotation
+          }}
           animate={{ 
             y: "120vh",
-            rotate: [0, 15, -15, 0]
+            rotate: [token.rotation, token.rotation + 60, token.rotation - 60, token.rotation]
           }}
           transition={{ 
             duration: token.speed,

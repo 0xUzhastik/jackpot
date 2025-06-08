@@ -1,104 +1,137 @@
 "use client";
 
-import { PastDraw, Deposit } from "@/lib/types";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
-} from "@/components/ui/card";
+import { PastDraw } from "@/lib/types";
+import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatTimeAgo } from "@/lib/utils";
+import { Star, Trophy, Award } from "lucide-react";
 
 interface PastDrawsProps {
   draws: PastDraw[];
-  deposits: Deposit[];
 }
 
-export default function PastDraws({ draws, deposits }: PastDrawsProps) {
-  const ticketColors = ['#0066CC', '#00A651', '#8A2BE2', '#FF6B00'];
-
+export default function PastDraws({ draws }: PastDrawsProps) {
   return (
-    <div className="h-full flex flex-col gap-6">
-      {/* Deposits Section */}
-      <Card className="ticket-box ticket-box-yellow flex-1">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-bold uppercase text-black border-b-2 border-black pb-2">Deposits</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[200px]">
-            <table className="w-full table-fixed">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-[#D50000] text-[#FFD700]">
-                  <th className="w-[45%] px-2 py-2 text-left text-xs font-bold uppercase">User</th>
-                  <th className="w-[25%] px-2 py-2 text-left text-xs font-bold uppercase">Token</th>
-                  <th className="w-[30%] px-2 py-2 text-right text-xs font-bold uppercase">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deposits.map((d, i) => (
-                  <motion.tr
-                    key={d.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={i % 2 === 0 ? 'bg-[#FFD700]' : 'bg-[#F5E9C9]'}
-                  >
-                    <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-black">
-                      <div className="flex items-center">
-                        <span className="h-2 w-2 rounded-full mr-1" style={{ backgroundColor: ticketColors[i % ticketColors.length] }} />
-                        <span className="truncate">{d.user}</span>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-black">
-                      {d.token}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-xs text-right font-mono font-bold text-black">
-                      ${d.amount.toFixed(2)}
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollArea>
-        </CardContent>
-      </Card>
-
-      {/* Past Draws Section */}
-      <Card className="ticket-box ticket-box-yellow flex-1">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-bold uppercase text-black border-b-2 border-black pb-2">Past Draws</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 overflow-y-auto" style={{ maxHeight: "calc(100% - 60px)" }}>
-          {draws.map((draw, index) => (
-            <motion.div 
-              key={draw.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="flex justify-between items-center"
-            >
-              <div>
-                <h3 className="text-xl font-bold text-black">{draw.name}</h3>
-                <a 
-                  href="#" 
-                  className="text-[#0066CC] text-sm hover:underline"
-                  onClick={(e) => e.preventDefault()}
+    <Card className="casino-box casino-box-gold overflow-hidden p-0 h-full flex flex-col relative">
+      {/* Corner stars */}
+      <div className="absolute top-2 left-2 z-10">
+        <Star className="h-4 w-4 casino-star" fill="currentColor" />
+      </div>
+      <div className="absolute top-2 right-2 z-10">
+        <Star className="h-4 w-4 casino-star" fill="currentColor" />
+      </div>
+      
+      <CardContent className="p-4 h-full flex flex-col min-w-0">
+        {/* Title */}
+        <div className="mb-3 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Trophy className="h-4 w-4 casino-text-gold" />
+            <h2 className="text-lg font-black uppercase tracking-wide casino-text-gold truncate" 
+                style={{ fontFamily: "Visby Round CF, SF Pro Display, sans-serif" }}>
+              Past Winners
+            </h2>
+            <Award className="h-4 w-4 casino-text-gold" />
+          </div>
+        </div>
+        
+        {/* Past Draws List */}
+        <div className="flex-1 overflow-hidden min-w-0">
+          <ScrollArea className="h-full">
+            <div className="space-y-1">
+              {draws.map((draw, index) => (
+                <motion.div
+                  key={draw.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="py-1 px-2 rounded-md overflow-hidden relative"
+                  style={{
+                    background: index % 2 === 0
+                      ? 'linear-gradient(to right, #4A0E4E, #2D0A30)'
+                      : 'linear-gradient(to right, #3A0A3E, #1D051A)',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(255, 215, 0, 0.2)'
+                  }}
                 >
-                  Verify Fairness
-                </a>
-              </div>
-              <span className="text-xl font-mono font-bold text-black">
-                {draw.amount.toLocaleString(undefined, { 
-                  minimumFractionDigits: 1,
-                  maximumFractionDigits: 1 
-                })}
-              </span>
-            </motion.div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
+                  {/* Winner badge - smaller */}
+                  <div className="absolute top-0.5 right-0.5">
+                    <motion.div
+                      animate={{
+                        rotate: [0, 10, -10, 0],
+                        scale: [1, 1.1, 1]
+                      }}
+                      transition={{
+                        duration: 3,
+                        repeat: Infinity,
+                        delay: index * 0.5
+                      }}
+                    >
+                      <Trophy className="h-2 w-2 casino-text-gold" fill="currentColor" />
+                    </motion.div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <motion.div
+                          className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-[#FFD700] to-[#FFFF00]"
+                          animate={{
+                            scale: [1, 1.2, 1],
+                            boxShadow: [
+                              '0 0 0px rgba(255, 215, 0, 0)',
+                              '0 0 4px rgba(255, 215, 0, 0.8)',
+                              '0 0 0px rgba(255, 215, 0, 0)'
+                            ]
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            delay: index * 0.3
+                          }}
+                        />
+                        <h3 className="text-xs font-black casino-text-gold truncate"
+                          style={{ fontFamily: "Visby Round CF, SF Pro Display, sans-serif" }}>
+                          {draw.name}
+                        </h3>
+                      </div>
+                      <motion.a
+                        href="#"
+                        className="casino-text-yellow text-xs hover:underline hover:text-[#FFFF00] transition-colors font-bold"
+                        onClick={(e) => e.preventDefault()}
+                        style={{ fontFamily: "Visby Round CF, SF Pro Display, sans-serif", fontSize: '10px' }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        🔍 Verify
+                      </motion.a>
+                    </div>
+                    
+                    <div className="text-right ml-2">
+                      <motion.span 
+                        className="text-xs font-black casino-text-gold"
+                        style={{ fontFamily: "Visby Round CF, SF Pro Display, sans-serif" }}
+                        initial={{ scale: 1 }}
+                        whileHover={{ 
+                          scale: 1.05,
+                          color: '#FFFF00'
+                        }}
+                      >
+                        ${draw.amount.toLocaleString(undefined, {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0
+                        })}
+                      </motion.span>
+                      <div className="text-xs casino-text-pink font-bold" style={{ fontSize: '9px' }}>
+                        WIN
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

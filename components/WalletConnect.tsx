@@ -1,26 +1,31 @@
 import { usePrivy } from '@privy-io/react-auth';
 import { Button } from '@/components/ui/button';
-import { WalletIcon } from 'lucide-react';
 
 export function WalletConnect() {
-  const { login, authenticated, user } = usePrivy();
+  const { login, authenticated, logout } = usePrivy();
+
+  const handleClick = () => {
+    if (authenticated) {
+      logout();
+    } else {
+      login();
+    }
+  };
 
   return (
-    <div className="w-full flex items-center justify-center p-4">
-      {!authenticated ? (
         <Button
-          onClick={login}
-          className="w-full bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-bold flex items-center gap-2"
+      onClick={handleClick}
+      className="px-4 py-2 rounded-md font-black uppercase tracking-wider text-white text-sm shadow-md border-2 border-yellow-400 hover:scale-105 transition-all duration-200"
+          style={{
+        background: '#FFD700',
+        fontFamily: 'Visby Round CF, SF Pro Display, sans-serif',
+            fontWeight: 900,
+            letterSpacing: '0.5px',
+        boxShadow: '0 0 10px rgba(255, 215, 0, 0.4)',
+        borderColor: '#FFD700',
+          }}
         >
-          <WalletIcon className="h-5 w-5" />
-          Connect Wallet
-        </Button>
-      ) : (
-        <div className="text-center">
-          <p className="text-sm text-gray-600">Connected as:</p>
-          <p className="font-bold text-[#8A2BE2]">{user?.wallet?.address.slice(0, 6)}...{user?.wallet?.address.slice(-4)}</p>
-        </div>
-      )}
-    </div>
+      Connect Wallet to Play
+          </Button>
   );
-} 
+}

@@ -1,40 +1,37 @@
-/* components/JackpotDonutChart.tsx
-   — Pot total + timer now sit **inside** the donut.
-   — Timer label reads "Round ends in". */
-
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import WalletTokensTable from '@/components/WalletTokensTable';
-import { toast } from '@/hooks/use-toast';
-
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { formatTimeAgo } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
+import { Connection } from '@solana/web3.js';
+import { useWallets, usePrivy } from '@privy-io/react-auth';
+import { useAudioContext } from './AudioProvider';
+import { jackpotAddr } from '@/lib/constants';
+import { triggerJackpotConfetti } from '@/lib/confetti';
+import { generateSpinningAngle, generateChartData } from '@/lib/wheel-utils';
+import { SpinningWheel } from './SpinningWheel';
+import { RoundStateDisplay } from './RoundStateDisplay';
 
-import {
-  Connection,
-  PublicKey,
-  Transaction,
-  SystemProgram,
-  LAMPORTS_PER_SOL,
-} from '@solana/web3.js';
-import {
-  getAssociatedTokenAddressSync,
-  createAssociatedTokenAccountInstruction,
-  createTransferInstruction,
-} from '@solana/spl-token';
+// Add TypeScript declaration for window.solana
+declare global {
+  interface Window {
+    solana?: {
+      signAndSendTransaction: (transaction: any) => Promise<{ signature: string }>;
+      isPhantom?: boolean;
+    };
+  }
+}
 
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import '@solana/wallet-adapter-react-ui/styles.css';
-
+/* -------------------------------------------------------------------------- */
+/*                                   TYPES                                    */
+/* -------------------------------------------------------------------------- */
 interface JackpotDonutChartProps {
   deposits: Deposit[];
   totalAmount: number;
+  simulateData?: boolean;
+  onRoundEnd?: (winner: string, amount: number) => void;
+  onNewRound?: () => void;
+  onDepositsChange?: (deposits: Deposit[] | ((prevDeposits: Deposit[]) => Deposit[])) => void;
 }
 
 interface Deposit {
@@ -43,239 +40,274 @@ interface Deposit {
   token: string;
   amount: number;
   timestamp: Date;
-  color: string;
 }
 
-interface TokenRow {
-  mint: string;
-  amount: number;
-  decimals: number;
-  symbol: string;
-  name: string;
-  image: string;
-  selected?: boolean;
-  selectedAmount?: number;
-}
+// Round states
+type RoundState = 'active' | 'ending' | 'ended' | 'starting';
 
+/* -------------------------------------------------------------------------- */
+/*                               MAIN COMPONENT                               */
+/* -------------------------------------------------------------------------- */
 export default function JackpotDonutChart({
   deposits,
   totalAmount,
+  simulateData = false,
+  onRoundEnd,
+  onNewRound,
+  onDepositsChange,
 }: JackpotDonutChartProps) {
-  const { connection }   = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
-  const jackpotAddr      = new PublicKey(process.env.NEXT_PUBLIC_JACKPOT_ADDRESS!);
+  /* -------------------------------- context ------------------------------ */
+  const connection = new Connection(process.env.NEXT_PUBLIC_HELIUS_RPC!);
+  const { authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
+  const connectedWallet = wallets[0];
+  const walletAddress = user?.wallet?.address;
+  
+  // Audio context
+  const { playSound } = useAudioContext();
 
-  const [selectedTokens, setSelectedTokens] = useState<TokenRow[]>([]);
-  const [depositing, setDepositing]         = useState(false);
+  /* -------------------------------- state -------------------------------- */
+  // Round management state
+  const [roundState, setRoundState] = useState<RoundState>('active');
+  const [winner, setWinner] = useState<string | null>(null);
+  const [winAmount, setWinAmount] = useState(0);
+  
+  // Spinning wheel state
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [finalSpinAngle, setFinalSpinAngle] = useState(0);
+  const [selectedWinner, setSelectedWinner] = useState<Deposit | null>(null);
+  const [shouldResetWheel, setShouldResetWheel] = useState(false);
 
-  /* ---------------- donut sizing ---------------- */
+  // 🔥 CRITICAL: Block new deposits during animations
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animationTimeoutRef = useRef<NodeJS.Timeout>();
+
+  /* ------------------------ data simulation ------------------------ */
+  useEffect(() => {
+    // 🔥 CRITICAL: Stop simulation completely during animations or non-active states
+    if (!simulateData || roundState !== 'active' || isAnimating) return;
+
+    const interval = setInterval(() => {
+      // 🔥 Double-check animation state before adding deposit
+      if (isAnimating) return;
+
+      const isUserDeposit = Math.random() < 0.2; // 20% chance it's the user
+      const newDeposit: Deposit = {
+        id: Math.random().toString(36).substr(2, 9),
+        user: isUserDeposit ? 'You' : `User${Math.floor(Math.random() * 9999)}`,
+        token: Math.random() > 0.7 ? 'USDC' : 'SOL',
+        amount: Math.floor(Math.random() * 500) + 50, // $50-$550
+        timestamp: new Date(),
+      };
+
+      // 🔥 CRITICAL: Set animation flag BEFORE updating data
+      setIsAnimating(true);
+
+      // Update deposits through parent component
+      onDepositsChange?.(prevDeposits => [...prevDeposits, newDeposit]);
+      
+      // 🎵 PLAY AUDIO BASED ON DEPOSIT TYPE
+      if (isUserDeposit) {
+        playSound('userDeposit');
+      } else {
+        playSound('deposit');
+      }
+      
+      // Toast notification for new deposit
+      toast({
+        title: '🎰 New Deposit!',
+        description: `${newDeposit.user} deposited $${newDeposit.amount} ${newDeposit.token}`,
+        duration: 2000,
+      });
+
+      // 🔥 CRITICAL: Clear animation flag after animation completes
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+      animationTimeoutRef.current = setTimeout(() => {
+        setIsAnimating(false);
+      }, 1500); // 1.5 seconds - longer than Recharts animation
+
+    }, Math.random() * 4000 + 5000); // 5-9 seconds (even longer gap)
+
+    return () => clearInterval(interval);
+  }, [simulateData, roundState, onDepositsChange, playSound, isAnimating]);
+
+  // Cleanup animation timeout
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  /* ------------------------ responsive ring sizing ------------------------ */
   const containerRef = useRef<HTMLDivElement>(null);
-  const [chartDims, setChartDims] = useState({ innerRadius: 60, outerRadius: 80 });
+  const [chartDims, setChartDims] = useState({ inner: 140, outer: 200 });
   useEffect(() => {
     const onResize = () => {
       if (!containerRef.current) return;
       const { clientWidth: w, clientHeight: h } = containerRef.current;
-      const r = Math.min(w, h) * 0.5;
-      setChartDims({ innerRadius: r * 0.75, outerRadius: r * 0.95 });
+      const r = Math.min(w, h) * 0.48;
+      setChartDims({ inner: r * 0.72, outer: r });
     };
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  /* ---------------- countdown ---------------- */
-  const [countdown, setCountdown] = useState({ h: 2, m: 15, s: 0 });
+  /* ------------------------------ countdown ------------------------------ */
+  const [seconds, setSeconds] = useState(54);
+  const [newRoundCountdown, setNewRoundCountdown] = useState(10);
+
   useEffect(() => {
-    const id = setInterval(() => {
-      setCountdown((p) => {
-        const t = p.h * 3600 + p.m * 60 + p.s - 1;
-        if (t <= 0) return { h: 2, m: 15, s: 0 };
-        return { h: ~~(t / 3600), m: ~~((t % 3600) / 60), s: t % 60 };
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-  const formattedTime = `${String(countdown.h).padStart(2, '0')}:${String(
-    countdown.m,
-  ).padStart(2, '0')}`;
-
-  /* ---------------- chart data ---------------- */
-  const ticketColors = ['#0066CC', '#00A651', '#8A2BE2', '#FF6B00'];
-  const remainingCap = 2000 - totalAmount;
-  const chartData = [
-    ...deposits.slice(0, 4).map((d) => ({ name: d.user, value: d.amount, color: d.color })),
-    { name: 'Remaining', value: remainingCap > 0 ? remainingCap : 0, color: '#333' },
-  ];
-  const RAD = Math.PI / 180;
-  const renderLabel = ({
-    cx,
-    cy,
-    midAngle,
-    innerRadius,
-    outerRadius,
-    percent,
-    name,
-  }: any) => {
-    if (name === 'Remaining' || percent < 0.05) return null;
-    const r = innerRadius + (outerRadius - innerRadius) * 0.7;
-    const x = cx + r * Math.cos(-midAngle * RAD);
-    const y = cy + r * Math.sin(-midAngle * RAD);
-    return (
-      <text
-        x={x}
-        y={y}
-        fill="#fff"
-        stroke="#000"
-        strokeWidth={1}
-        fontSize={14}
-        fontWeight="bold"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        {(percent * 100).toFixed(0)}%
-      </text>
-    );
-  };
-
-  /* ---------------- tx builder ---------------- */
-  const buildTx = async () => {
-    if (!publicKey) throw new Error('Wallet not connected');
-    const tx = new Transaction();
-
-    for (const tok of selectedTokens) {
-      const amt = tok.selectedAmount ?? 0;
-      if (amt <= 0) continue;
-
-      if (tok.mint === 'So11111111111111111111111111111111111111112') {
-        tx.add(
-          SystemProgram.transfer({
-            fromPubkey: publicKey,
-            toPubkey: jackpotAddr,
-            lamports: Math.round(amt * LAMPORTS_PER_SOL),
-          }),
-        );
-      } else {
-        const mint = new PublicKey(tok.mint);
-        const fromAta = getAssociatedTokenAddressSync(mint, publicKey);
-        const toAta   = getAssociatedTokenAddressSync(mint, jackpotAddr, true);
-
-        if (!(await connection.getAccountInfo(toAta))) {
-          tx.add(
-            createAssociatedTokenAccountInstruction(
-              publicKey,
-              toAta,
-              jackpotAddr,
-              mint,
-            ),
-          );
-        }
-        const rawAmt = BigInt(Math.round(amt * 10 ** tok.decimals));
-        tx.add(createTransferInstruction(fromAta, toAta, publicKey, rawAmt));
+    const interval = setInterval(() => {
+      if (roundState === 'active') {
+        setSeconds((s) => {
+          if (s <= 1) {
+            // Round is ending
+            setRoundState('ending');
+            return 0;
+          }
+          return s - 1;
+        });
+      } else if (roundState === 'ended') {
+        setNewRoundCountdown((s) => {
+          if (s <= 1) {
+            // Start new round
+            startNewRound();
+            return 10;
+          }
+          return s - 1;
+        });
       }
-    }
+    }, 1000);
 
-    tx.feePayer        = publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-    return tx;
+    return () => clearInterval(interval);
+  }, [roundState]);
+
+  // Handle round ending sequence
+  useEffect(() => {
+    if (roundState === 'ending') {
+      // 🔥 CRITICAL: Stop all animations during round end
+      setIsAnimating(true);
+
+      if (deposits.length === 0) {
+        // No deposits, skip spinning
+        setRoundState('ended');
+        return;
+      }
+
+      // Select winner immediately
+      const randomWinner = deposits[Math.floor(Math.random() * deposits.length)];
+      setSelectedWinner(randomWinner);
+
+      // Small delay before starting the spin
+      setTimeout(() => {
+        // Start spinning animation
+        setIsSpinning(true);
+        
+        // Calculate dramatic final spin angle with near-miss effects
+        const dramaticSpinAngle = generateSpinningAngle(deposits, randomWinner, totalAmount);
+        setFinalSpinAngle(dramaticSpinAngle);
+      }, 500);
+      
+      // After spinning animation completes, reveal winner
+      setTimeout(() => {
+        setIsSpinning(false);
+        setWinner(randomWinner.user);
+        setWinAmount(totalAmount);
+        
+        // 🎵 PLAY WIN SOUND
+        playSound('win');
+        
+        // 🎉 TRIGGER CONFETTI CELEBRATION! 🎉
+        triggerJackpotConfetti();
+        
+        // Call parent callback if provided
+        onRoundEnd?.(randomWinner.user, totalAmount);
+        
+        toast({
+          title: '🎉 JACKPOT WINNER! 🎉',
+          description: `${randomWinner.user} won $${totalAmount.toFixed(0)}!`,
+          duration: 5000,
+        });
+        
+        setRoundState('ended');
+      }, 7000); // 6.5s spinning + 0.5s buffer
+    }
+  }, [roundState, deposits, totalAmount, onRoundEnd, playSound]);
+
+  const startNewRound = () => {
+    setRoundState('starting');
+    
+    // IMPORTANT: Reset wheel position for new round
+    setShouldResetWheel(true);
+    
+    // Reset all round data
+    onDepositsChange?.([]);
+    setWinner(null);
+    setWinAmount(0);
+    setSeconds(54);
+    setNewRoundCountdown(10);
+    setIsSpinning(false);
+    setFinalSpinAngle(0);
+    setSelectedWinner(null);
+    setIsAnimating(false); // Reset animation flag
+    
+    // Call parent callback if provided
+    onNewRound?.();
+    
+    toast({
+      title: '🎰 NEW ROUND STARTED!',
+      description: 'Place your deposits now!',
+      duration: 3000,
+    });
+    
+    // Start the new round after a brief moment and stop wheel reset
+    setTimeout(() => {
+      setRoundState('active');
+      setShouldResetWheel(false); // Stop the reset after the wheel has moved
+    }, 1000);
   };
 
-  const onDeposit = async () => {
-    if (!publicKey) {
-      toast({ title: 'Connect wallet', variant: 'destructive' });
-      return;
-    }
-    if (selectedTokens.length === 0) return;
-    try {
-      setDepositing(true);
-      const tx  = await buildTx();
-      const sig = await sendTransaction(tx, connection);
-      await connection.confirmTransaction(sig, 'confirmed');
-      toast({ title: 'Deposit successful', description: sig });
-      setSelectedTokens([]);
-    } catch (e: any) {
-      toast({ title: 'Deposit failed', description: e?.message ?? '', variant: 'destructive' });
-    } finally {
-      setDepositing(false);
-    }
-  };
+  /* ------------------------------ chart data ----------------------------- */
+  // 🔥 THE REAL FIX: Calculate totalAmount INSIDE useMemo to avoid external dependency
+  const chartData = useMemo(() => {
+    // Calculate total inside useMemo to avoid dependency issues
+    const calculatedTotal = deposits.reduce((sum, deposit) => sum + deposit.amount, 0);
+    return generateChartData(deposits, calculatedTotal);
+  }, [deposits]); // 🔥 ONLY depend on deposits array, not external totalAmount!
 
-  /* ---------------- UI ---------------- */
+  /* --------------------------------- UI ---------------------------------- */
   return (
-    <Card className="ticket-box ticket-box-yellow flex flex-col items-center py-4">
-      <CardContent className="w-full flex flex-col items-center gap-6">
-        {/* donut + inner totals */}
-        <div ref={containerRef} className="relative w-full h-[300px] md:h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={chartDims.innerRadius}
-                outerRadius={chartDims.outerRadius}
-                dataKey="value"
-                labelLine={false}
-                label={renderLabel}
-                stroke="none"
-              >
-                {chartData.map((e, i) => (
-                  <Cell
-                    key={i}
-                    fill={e.name !== 'Remaining' ? ticketColors[i % ticketColors.length] : e.color}
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+    <div className="flex flex-col items-center py-6 relative">
+      <div className="w-full flex flex-col items-center gap-6">
+        {/* ------------------------------- RING ------------------------------ */}
+        <div
+          ref={containerRef}
+          className="relative w-full h-[340px] md:h-[420px]"
+        >
+          <SpinningWheel
+            chartData={chartData}
+            chartDims={chartDims}
+            isSpinning={isSpinning}
+            finalSpinAngle={finalSpinAngle}
+            shouldReset={shouldResetWheel}
+          />
 
-          {/* center overlay */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            {/* pot total */}
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-              className="text-center"
-            >
-              <span
-                className="block text-5xl sm:text-6xl md:text-7xl font-bold font-mono text-[#FFD700]"
-                style={{ textShadow: '2px 2px 0 #000' }}
-              >
-                ${totalAmount.toFixed(0)}
-              </span>
-            </motion.div>
-
-            {/* timer */}
-            <div className="mt-4 flex flex-col items-center">
-              <span className="text-xs uppercase font-bold tracking-wide text-gray-200">
-                Round ends in
-              </span>
-              <span
-                className="text-2xl sm:text-3xl font-mono font-bold text-[#FFD700]"
-                style={{ textShadow: '1px 1px 0 #000' }}
-              >
-                {formattedTime}
-              </span>
-            </div>
-          </div>
+          <RoundStateDisplay
+            roundState={roundState}
+            totalAmount={totalAmount}
+            seconds={seconds}
+            winner={winner}
+            winAmount={winAmount}
+            newRoundCountdown={newRoundCountdown}
+            isSpinning={isSpinning}
+          />
         </div>
-
-        {/* token picker */}
-        <WalletTokensTable onTokensSelected={setSelectedTokens} />
-
-        {/* wallet controls + deposit */}
-        <div className="flex flex-col items-center gap-3 w-full">
-          <WalletMultiButton className="!bg-[#FFD700] !text-black font-bold w-full" />
-          <Button
-            onClick={onDeposit}
-            disabled={depositing || selectedTokens.length === 0}
-            className="w-full bg-[#FFD700] text-black font-bold disabled:opacity-50"
-          >
-            {depositing ? 'Processing…' : 'Deposit selected'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
